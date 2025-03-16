@@ -22,40 +22,61 @@ class DifyEvaluator:
     def evaluate_query(self, query, expected_answer=None):
         """评估单个查询"""
         start_time = time.time()
+        response_time = 0  # 初始化变量
 
         payload = {
             "inputs": {},
             "query": query,
-            "response_mode": "blocking",
+            "user": "evaluator",  # 添加用户标识符
+            "response_mode": "streaming",  # 使用streaming模式
             "conversation_id": "",
-            "stream": False
+            "stream": True  # 设置为流式处理
         }
 
         try:
             response = requests.post(
                 f"{self.api_endpoint}/chat-messages",
                 headers=self.headers,
-                json=payload
+                json=payload,
+                stream=True  # 设置为流式处理
             )
 
-            response_time = time.time() - start_time
+            response_time = time.time() - start_time  # 计算响应时间
 
             if response.status_code == 200:
-                data = response.json()
-                answer = data.get("answer", "")
-                retrieval_docs = data.get("retrieval_documents", [])
+                answer = ""
+                retrieval_docs = []
+
+                # 处理流式响应
+                for line in response.iter_lines():
+                    if line:
+                        line_text = line.decode('utf-8')
+                        # 移除SSE前缀"data: "
+                        if line_text.startswith('data: '):
+                            line_json = line_text[6:]
+                            try:
+                                data = json.loads(line_json)
+                                if "answer" in data:
+                                    answer += data.get("answer", "")
+                                if "retrieval_documents" in data and not retrieval_docs:
+                                    retrieval_docs = data.get("retrieval_documents", [])
+                            except json.JSONDecodeError:
+                                continue
+
+                # 计算完整响应处理时间
+                total_response_time = time.time() - start_time
 
                 result = {
                     "query": query,
                     "expected_answer": expected_answer,
                     "actual_answer": answer,
-                    "response_time": response_time,
+                    "response_time": total_response_time,  # 使用总响应时间
                     "retrieval_count": len(retrieval_docs),
                     "retrieval_docs": [doc.get("document", {}).get("content", "")[:100] + "..."
-                                       for doc in retrieval_docs]
+                                       for doc in retrieval_docs] if retrieval_docs else []
                 }
 
-                if expected_answer:
+                if expected_answer and answer:
                     # 简单相似度计算 (可改进)
                     from sklearn.feature_extraction.text import TfidfVectorizer
                     from sklearn.metrics.pairwise import cosine_similarity
@@ -70,9 +91,11 @@ class DifyEvaluator:
 
                 return result
             else:
+                error_detail = response.json() if response.content else "No error details"
                 return {
                     "query": query,
                     "error": f"API Error: {response.status_code}",
+                    "error_detail": error_detail,
                     "response_time": response_time
                 }
         except Exception as e:

@@ -7,13 +7,13 @@ def create_simple_test_set(output_path="data/test_dataset.csv"):
     test_cases = [
         {
             "id": str(uuid.uuid4()),
-            "query": "什么是知识库?",
-            "expected_answer": "知识库是组织和存储结构化与非结构化信息的系统，便于检索和使用。"
+            "query": "1+1=?",
+            "expected_answer": "2"
         },
         {
             "id": str(uuid.uuid4()),
-            "query": "如何提高知识库的检索效果?",
-            "expected_answer": "提高知识库检索效果可以通过优化分块策略、使用混合检索、选择更好的嵌入模型等方法。"
+            "query": "5*5=?",
+            "expected_answer": "25"
         },
         {
             "id": str(uuid.uuid4()),
